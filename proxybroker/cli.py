@@ -203,6 +203,12 @@ def add_serve_args(group):
                 this value, proxy will be rejected.
                 The default value is 8 seconds''')
     group.add_argument(
+        '--random-proxy',
+        action='store_true',
+        dest='random_proxy',
+        help='''Flag that indicates whether to distribute requests through a bunch of
+            different proxies''')
+    group.add_argument(
         '--prefer-connect',
         action='store_true',
         dest='prefer_connect',
@@ -299,7 +305,7 @@ def cli(args=sys.argv[1:]):
         broker.serve(
             host=ns.host, port=ns.port, limit=ns.limit,
             min_req_proxy=ns.min_req_proxy, max_error_rate=ns.max_error_rate,
-            max_resp_time=ns.max_resp_time, prefer_connect=ns.prefer_connect,
+            max_resp_time=ns.max_resp_time, random_proxy=ns.random_proxy, prefer_connect=ns.prefer_connect,
             http_allowed_codes=ns.http_allowed_codes, backlog=ns.backlog,
             data=ns.data, types=ns.types, countries=ns.countries, post=ns.post,
             strict=ns.strict, dnsbl=ns.dnsbl)

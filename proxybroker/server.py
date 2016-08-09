@@ -1,11 +1,11 @@
 import time
 import heapq
 import asyncio
+from random import shuffle
 
 from .errors import *
 from .utils import log, parse_headers, parse_status_line
 from .resolver import Resolver
-
 
 CONNECTED = b'HTTP/1.1 200 Connection established\r\n\r\n'
 
@@ -13,9 +13,10 @@ CONNECTED = b'HTTP/1.1 200 Connection established\r\n\r\n'
 class ProxyPool:
     """Imports and gives proxies from queue on demand."""
 
-    def __init__(self, proxies, min_req_proxy=5,
+    def __init__(self, proxies, random_proxy, min_req_proxy=5,
                  max_error_rate=0.5, max_resp_time=8):
         self._proxies = proxies
+        self._random_proxy = random_proxy
         self._pool = []
         self._min_req_proxy = min_req_proxy
         # if num of erros greater or equal 50% - proxy will be remove from pool
@@ -23,7 +24,7 @@ class ProxyPool:
         self._max_resp_time = max_resp_time
 
     async def get(self, scheme):
-        for priority, proxy in self._pool:
+        for priority, proxy in shuffle(self._pool) if self._random_proxy else self._pool:
             if scheme in proxy.schemes:
                 chosen = proxy
                 self._pool.remove((proxy.priority, proxy))
@@ -45,8 +46,8 @@ class ProxyPool:
 
     def put(self, proxy):
         if (proxy.stat['requests'] >= self._min_req_proxy and
-            ((proxy.error_rate > self._max_error_rate) or
-             (proxy.avg_resp_time > self._max_resp_time))):
+                ((proxy.error_rate > self._max_error_rate) or
+                     (proxy.avg_resp_time > self._max_resp_time))):
             log.debug('%s:%d removed from proxy pool' % (proxy.host, proxy.port))
         else:
             heapq.heappush(self._pool, (proxy.priority, proxy))
@@ -58,7 +59,7 @@ class Server:
 
     def __init__(self, host, port, proxies, timeout=8, max_tries=3,
                  min_req_proxy=5, max_error_rate=0.5, max_resp_time=8,
-                 prefer_connect=False, http_allowed_codes=None,
+                 random_proxy=False, prefer_connect=False, http_allowed_codes=None,
                  backlog=100, loop=None, **kwargs):
         self.host = host
         self.port = int(port)
@@ -71,7 +72,7 @@ class Server:
         self._server = None
         self._connections = {}
         self._proxy_pool = ProxyPool(
-            proxies, min_req_proxy, max_error_rate, max_resp_time)
+            proxies, random_proxy, min_req_proxy, max_error_rate, max_resp_time)
         self._resolver = Resolver(loop=self._loop)
         self._http_allowed_codes = http_allowed_codes or []
 
@@ -114,26 +115,27 @@ class Server:
                     self.stop()
                 else:
                     raise exc
+
         f = asyncio.ensure_future(self._handle(client_reader, client_writer))
         f.add_done_callback(_on_completion)
         self._connections[f] = (client_reader, client_writer)
 
     async def _handle(self, client_reader, client_writer):
         log.debug('Accepted connection from %s' % (
-                  client_writer.get_extra_info('peername'),))
+            client_writer.get_extra_info('peername'),))
 
         request, headers = await self._parse_request(client_reader)
         scheme = self._identify_scheme(headers)
         client = id(client_reader)
         log.debug('client: %d; request: %s; headers: %s; scheme: %s' % (
-                  client, request, headers, scheme))
+            client, request, headers, scheme))
 
         for attempt in range(self._max_tries):
             stime, err = 0, None
             proxy = await self._proxy_pool.get(scheme)
             proto = self._choice_proto(proxy, scheme)
             log.debug('client: %d; attempt: %d; proxy: %s; proto: %s' % (
-                      client, attempt, proxy, proto))
+                client, attempt, proxy, proto))
             try:
                 await proxy.connect()
 
@@ -172,7 +174,7 @@ class Server:
                 continue
             except ErrorOnStream as e:
                 log.debug('client: %d; error: %r; EOF: %s' % (
-                          client, e, client_reader.at_eof()))
+                    client, e, client_reader.at_eof()))
                 for task in stream:
                     if not task.done():
                         task.cancel()

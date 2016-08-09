@@ -210,6 +210,9 @@ class Broker:
             (optional) The maximum response time in seconds.
             If proxy.avg_resp_time exceeds this value, proxy will be removed
             from the pool. The default value is 8
+        :param bool random_proxy:
+            (optional) If true, server will distribute requests through a bunch of
+            different proxies. The default is false
         :param bool prefer_connect:
             (optional) Flag that indicates whether to use the CONNECT method
             if possible. For example: If is set to True and a proxy supports
