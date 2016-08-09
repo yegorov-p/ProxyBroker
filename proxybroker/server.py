@@ -24,7 +24,9 @@ class ProxyPool:
         self._max_resp_time = max_resp_time
 
     async def get(self, scheme):
-        for priority, proxy in shuffle(self._pool) if self._random_proxy else self._pool:
+        if self._random_proxy:
+            shuffle(self._pool)
+        for priority, proxy in self._pool:
             if scheme in proxy.schemes:
                 chosen = proxy
                 self._pool.remove((proxy.priority, proxy))
