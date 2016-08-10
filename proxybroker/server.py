@@ -1,7 +1,6 @@
 import time
 import heapq
 import asyncio
-from random import shuffle
 
 from .errors import *
 from .utils import log, parse_headers, parse_status_line
@@ -25,15 +24,17 @@ class ProxyPool:
 
     async def get(self, scheme):
         if self._random_proxy:
-            shuffle(self._pool)
-        for priority, proxy in self._pool:
-            if scheme in proxy.schemes:
-                chosen = proxy
-                self._pool.remove((proxy.priority, proxy))
-                break
+            return await self._import(scheme)
         else:
-            chosen = await self._import(scheme)
-        return chosen
+            for priority, proxy in self._pool:
+                if scheme in proxy.schemes:
+                    chosen = proxy
+                    self._pool.remove((proxy.priority, proxy))
+                    break
+            else:
+                chosen = await self._import(scheme)
+
+            return chosen
 
     async def _import(self, expected_scheme):
         while True:
@@ -53,6 +54,8 @@ class ProxyPool:
             log.debug('%s:%d removed from proxy pool' % (proxy.host, proxy.port))
         else:
             heapq.heappush(self._pool, (proxy.priority, proxy))
+
+        print('%s:%d stat: %s' % (proxy.host, proxy.port, proxy.stat))
         log.debug('%s:%d stat: %s' % (proxy.host, proxy.port, proxy.stat))
 
 
